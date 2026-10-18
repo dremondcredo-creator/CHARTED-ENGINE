@@ -7,6 +7,7 @@ import sqlite3
 from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from itertools import chain
 from pathlib import Path
 from threading import Lock
 
@@ -69,7 +70,16 @@ class PostgresConnection:
 
     def executemany(self, query, params):
         cursor = self._conn.cursor(row_factory=dict_row)
-        cursor.executemany(_postgres_placeholders(query, None), params)
+        rows = iter(params)
+        try:
+            first = next(rows)
+        except StopIteration:
+            cursor.executemany(_postgres_placeholders(query, None), ())
+        else:
+            cursor.executemany(
+                _postgres_placeholders(query, first),
+                chain((first,), rows),
+            )
         return PostgresCursor(cursor)
 
     def commit(self):

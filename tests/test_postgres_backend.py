@@ -1,4 +1,9 @@
-from cne.db.database import HybridRow, _postgres_placeholders, _postgres_schema
+from cne.db.database import (
+    HybridRow,
+    PostgresConnection,
+    _postgres_placeholders,
+    _postgres_schema,
+)
 
 
 def test_postgres_schema_translates_sqlite_types_and_constraints():
@@ -30,3 +35,31 @@ def test_postgres_placeholder_conversion_supports_positional_and_named_parameter
     assert _postgres_placeholders(
         "INSERT INTO t (name) VALUES (:name)", {"name": "value"}
     ) == "INSERT INTO t (name) VALUES (%(name)s)"
+
+
+def test_postgres_executemany_converts_named_parameter_batches():
+    class Cursor:
+        def executemany(self, query, params):
+            self.query = query
+            self.params = list(params)
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def cursor(self, row_factory):
+            return self.cursor_instance
+
+    connection = Connection()
+    PostgresConnection(connection).executemany(
+        "INSERT INTO t (name) VALUES (:name)",
+        [{"name": "first"}, {"name": "second"}],
+    )
+
+    assert connection.cursor_instance.query == (
+        "INSERT INTO t (name) VALUES (%(name)s)"
+    )
+    assert connection.cursor_instance.params == [
+        {"name": "first"},
+        {"name": "second"},
+    ]
