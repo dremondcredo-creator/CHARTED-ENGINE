@@ -94,9 +94,12 @@ def tag_releases(conn, country="US"):
                 break
         if match is None: match = regs[0]
         conn.execute("""
-            INSERT OR REPLACE INTO release_regimes
+            INSERT INTO release_regimes
               (release_id, country, regime_id, regime_label, tagged_utc)
             VALUES (?,?,?,?,?)
+            ON CONFLICT (release_id) DO UPDATE SET
+              country=excluded.country, regime_id=excluded.regime_id,
+              regime_label=excluded.regime_label, tagged_utc=excluded.tagged_utc
         """, (r["release_id"], country, match["regime_id"], match["label"], now))
         n += 1
     conn.commit()

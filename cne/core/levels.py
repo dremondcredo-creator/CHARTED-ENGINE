@@ -92,15 +92,17 @@ def detect_levels(conn, symbol, timeframe="5m", period="5d",
 
     for ts, price in highs:
         conn.execute("""
-            INSERT OR IGNORE INTO pivots
+            INSERT INTO pivots
               (symbol, timeframe, kind, ts_utc, price, strength, detected_utc)
             VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT (symbol, timeframe, kind, ts_utc) DO NOTHING
         """, (symbol, timeframe, "HIGH", ts, price, pivot_strength, now_ts.isoformat()))
     for ts, price in lows:
         conn.execute("""
-            INSERT OR IGNORE INTO pivots
+            INSERT INTO pivots
               (symbol, timeframe, kind, ts_utc, price, strength, detected_utc)
             VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT (symbol, timeframe, kind, ts_utc) DO NOTHING
         """, (symbol, timeframe, "LOW", ts, price, pivot_strength, now_ts.isoformat()))
 
     for c, kind in [(c, "RESISTANCE") for c in res] + [(c, "SUPPORT") for c in sup]:

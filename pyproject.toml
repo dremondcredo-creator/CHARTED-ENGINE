@@ -17,6 +17,7 @@ dependencies = [
     "APScheduler>=3.10",
     "streamlit>=1.32",
     "streamlit-autorefresh>=1.0",
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]

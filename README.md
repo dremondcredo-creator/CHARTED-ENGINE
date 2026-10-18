@@ -1,9 +1,10 @@
 # Charted News Engine
 
 Event-driven news-trading decision support. The React dashboard follows the
-engine's five layers and reads live records from the same SQLite database as
-the CLI, scheduler, collectors and learning pipeline. It does not display
-fabricated market values or submit trades.
+engine's five layers and reads live records from the same database as the CLI,
+scheduler, collectors and learning pipeline. Local development uses SQLite;
+Railway can use PostgreSQL. The engine does not display fabricated market
+values or submit trades.
 
 ## Install the engine
 
@@ -21,22 +22,26 @@ Workflow 01 collection page or `cne collect` to ingest public no-key sources.
 
 The Railway Docker deployment builds the React/Vite frontend and runs the HTTP
 dashboard together with the periodic collection and release-preparation
-scheduler in one service. Attach a Railway persistent volume at `/data` before
-relying on stored records; SQLite data is written to `/data/cne.db`. The
-service listens on Railway's injected `PORT` and responds to `/api/health`.
+scheduler in one service. The app uses the Railway Postgres `DATABASE_URL`;
+the original SQLite volume remains attached at `/data` as a migration backup.
+The service listens on Railway's injected `PORT` and responds to `/api/health`.
 
 1. Install the Railway CLI, authenticate with `railway login`, and link or
    create a Railway project and service.
-2. Add a persistent volume mounted at `/data`.
-3. Deploy the repository root with `railway up`.
-4. Set optional provider credentials in Railway Variables, never in Git or
+2. Add a Postgres service and reference its `DATABASE_URL` from the app service.
+3. To import an existing SQLite database once, set
+   `CNE_SQLITE_IMPORT_PATHS=/data/cne.db` before starting the app. The importer
+   takes a consistent SQLite backup, validates it, and imports all tables
+   transactionally with an idempotent migration record.
+4. Deploy the repository root with `railway up`.
+5. Set optional provider credentials in Railway Variables, never in Git or
    `.env.example`. Public dashboard access is not authenticated; do not create a
    public domain until access is protected or public exposure is explicitly
    intended.
 
 The deployment config uses a Dockerfile build, an HTTP health check, and a
-restart-on-failure policy. SQLite is designed for this single-service
-deployment; do not scale the service horizontally with a shared local database.
+restart-on-failure policy. Local development and tests continue to use SQLite
+unless `DATABASE_URL` is set.
 
 ## Workflow 01 — Data collection
 

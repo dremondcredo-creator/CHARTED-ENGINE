@@ -20,7 +20,7 @@ from cne.collectors.pipeline import collect_all
 from cne.config import settings
 from cne.core import fundamentals, lights, macro, market, simulator
 from cne.core.events import BY_CODE, seed
-from cne.db.database import connect, init_db
+from cne.db.database import DB_ERRORS, connect, data_version, init_db
 from cne.learning.lookup import historical_edge_for_release
 from cne.scheduler.planner import build_schedule
 
@@ -1301,7 +1301,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/"):
             try:
                 self._get_json(path, parse_qs(parsed.query))
-            except (ValueError, sqlite3.Error) as exc:
+            except (ValueError, *DB_ERRORS) as exc:
                 log.exception("Dashboard request failed for %s", path)
                 self._json(500, {"error": "Dashboard data request failed.", "detail": str(exc)})
             return
@@ -1405,7 +1405,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _stream_events(self) -> None:
         conn = connect()
         try:
-            data_version = conn.execute("PRAGMA data_version").fetchone()[0]
+            last_data_version = data_version(conn)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache, no-transform")
@@ -1421,9 +1421,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 readable, _, _ = select.select([self.connection], [], [], 2)
                 if readable and not self.connection.recv(1, socket.MSG_PEEK):
                     break
-                current_version = conn.execute("PRAGMA data_version").fetchone()[0]
-                if current_version != data_version:
-                    data_version = current_version
+                current_version = data_version(conn)
+                if current_version != last_data_version:
+                    last_data_version = current_version
                     payload = json.dumps(
                         {"updated_at": datetime.now(timezone.utc).isoformat()}
                     )

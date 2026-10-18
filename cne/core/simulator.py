@@ -147,7 +147,7 @@ def _advise(balance, risk_pct, risk_amount, lot, raw_lot, rr, stop_pct, pips_sto
 
 def save(conn, result, *, release_id=None, rules_name=None, notes=None):
     if result.get("error"): return None
-    conn.execute("""
+    cursor = conn.execute("""
         INSERT INTO trade_simulations
           (ts_utc, symbol, direction, account_balance, risk_pct, risk_amount,
            entry, stop, target, pips_stop, pips_target, pip_value,
@@ -155,6 +155,7 @@ def save(conn, result, *, release_id=None, rules_name=None, notes=None):
            stop_pct, target_pct, warnings, suggestions,
            release_id, rules_name, notes)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        RETURNING id
     """, (datetime.now(timezone.utc).isoformat(),
           result["symbol"], result["direction"], result["balance"],
           result["risk_pct"], result["risk_amount"],
@@ -166,8 +167,9 @@ def save(conn, result, *, release_id=None, rules_name=None, notes=None):
           result.get("target_pct"),
           json.dumps(result["warnings"]), json.dumps(result["suggestions"]),
           release_id, rules_name, notes))
+    simulation_id = cursor.fetchone()["id"]
     conn.commit()
-    return conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    return simulation_id
 
 
 def history(conn, symbol=None, limit=30):

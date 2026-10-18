@@ -11,6 +11,13 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS migration_imports (
+    source_key            TEXT PRIMARY KEY,
+    source_fingerprint    TEXT NOT NULL,
+    records_json          TEXT NOT NULL,
+    imported_at_utc       TEXT NOT NULL
+);
+
 -- ─── Event dictionary ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS event_definitions (
     code        TEXT PRIMARY KEY,

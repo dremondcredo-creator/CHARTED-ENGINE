@@ -103,6 +103,7 @@ def run(conn, rule_name, symbol="GOLD", start_ts="2000-01-01", end_ts="2099-01-0
            sharpe_like, max_drawdown_pct, total_return_pct,
            equity_curve, notes, computed_utc)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        RETURNING id
     """, (rule["id"], rule_name, symbol, start_ts, end_ts,
           len(trades), len(wins), len(losses), len(flats),
           round(len(wins) / len(trades), 4), round(aw, 4), round(al, 4),
@@ -111,7 +112,7 @@ def run(conn, rule_name, symbol="GOLD", start_ts="2000-01-01", end_ts="2099-01-0
           round(curve[-1]["cum_pct"], 4) if curve else 0.0,
           json.dumps(curve), None,
           datetime.now(timezone.utc).isoformat()))
-    run_id = cur.lastrowid
+    run_id = cur.fetchone()["id"]
 
     for t in trades:
         conn.execute("""

@@ -78,6 +78,8 @@ class Settings:
     base_dir: Path
     data_dir: Path
     db_path: Path
+    database_url: str
+    sqlite_import_paths: tuple[Path, ...]
     calendar_csv: Path
 
     telegram_bot_token: str
@@ -117,11 +119,18 @@ def _load() -> Settings:
     data_dir = Path(data_env).expanduser().resolve() if data_env else (base / "data")
     db_env = _env("CNE_DB_PATH")
     db_path = Path(db_env).expanduser().resolve() if db_env else (data_dir / "cne.db")
+    import_paths = tuple(
+        Path(value.strip()).expanduser()
+        for value in _env("CNE_SQLITE_IMPORT_PATHS").split(",")
+        if value.strip()
+    )
 
     s = Settings(
         base_dir=base,
         data_dir=data_dir,
         db_path=db_path,
+        database_url=_env("DATABASE_URL"),
+        sqlite_import_paths=import_paths,
         calendar_csv=data_dir / "calendar.csv",
         telegram_bot_token=_env("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_env("TELEGRAM_CHAT_ID"),
