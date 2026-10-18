@@ -131,6 +131,16 @@ class ReleaseAnalysisTests(unittest.TestCase):
         self.assertEqual(surprise_row["normalization_status"], "INSUFFICIENT_HISTORY")
         self.assertEqual(surprise.compute_surprise("US_UNEMPLOYMENT", 4.0, 4.2)["impact"], "BEARISH")
 
+        self.conn.execute(
+            "UPDATE release_monitor_results SET is_revision=1"
+        )
+        self.conn.commit()
+        self.assertEqual(release_monitor.process_releases(self.conn), 1)
+        updated = self.conn.execute(
+            "SELECT is_revision FROM release_monitor_results"
+        ).fetchone()
+        self.assertEqual(updated["is_revision"], 1)
+
     def test_unverified_actual_or_post_release_forecast_never_creates_surprise(self):
         scheduled = datetime.now(timezone.utc) - timedelta(minutes=1)
         database.upsert_release(

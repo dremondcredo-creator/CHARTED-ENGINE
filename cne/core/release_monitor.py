@@ -395,7 +395,9 @@ def process_releases(conn) -> int:
               previous_retrieved_at_utc=COALESCE(
                   release_monitor_results.previous_retrieved_at_utc,
                   excluded.previous_retrieved_at_utc),
-              is_revision=MAX(release_monitor_results.is_revision, excluded.is_revision),
+              is_revision=CASE
+                WHEN release_monitor_results.is_revision > excluded.is_revision
+                THEN release_monitor_results.is_revision ELSE excluded.is_revision END,
               data_status=excluded.data_status,
               status_details_json=excluded.status_details_json,
               raw_surprise=excluded.raw_surprise,

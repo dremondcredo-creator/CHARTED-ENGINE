@@ -247,7 +247,9 @@ def collect(conn, *, days_back: int = 7, days_ahead: int = 45) -> int:
               importance=COALESCE(excluded.importance, calendar_events.importance),
               retrieved_at_utc=excluded.retrieved_at_utc,
               release_status=excluded.release_status,
-              is_revision=MAX(calendar_events.is_revision, excluded.is_revision),
+              is_revision=CASE
+                WHEN calendar_events.is_revision > excluded.is_revision
+                THEN calendar_events.is_revision ELSE excluded.is_revision END,
               raw_json=excluded.raw_json
             """,
             (
