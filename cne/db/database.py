@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,7 +59,7 @@ class PostgresConnection:
         self._conn = conn
 
     def execute(self, query, params=None):
-        query = query.replace("?", "%s")
+        query = _postgres_placeholders(query, params)
         cursor = self._conn.cursor(row_factory=dict_row)
         cursor.execute(query) if params is None else cursor.execute(query, params)
         return PostgresCursor(cursor)
@@ -68,7 +69,7 @@ class PostgresConnection:
 
     def executemany(self, query, params):
         cursor = self._conn.cursor(row_factory=dict_row)
-        cursor.executemany(query.replace("?", "%s"), params)
+        cursor.executemany(_postgres_placeholders(query, None), params)
         return PostgresCursor(cursor)
 
     def commit(self):
@@ -82,6 +83,16 @@ class PostgresConnection:
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
+
+
+def _postgres_placeholders(query: str, params) -> str:
+    if isinstance(params, Mapping):
+        return re.sub(
+            r"(?<!:):([A-Za-z_][A-Za-z_0-9]*)",
+            r"%(\1)s",
+            query,
+        )
+    return query.replace("?", "%s")
 
 
 def _postgres_schema() -> str:

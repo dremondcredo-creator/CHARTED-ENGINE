@@ -1,4 +1,4 @@
-from cne.db.database import HybridRow, _postgres_schema
+from cne.db.database import HybridRow, _postgres_placeholders, _postgres_schema
 
 
 def test_postgres_schema_translates_sqlite_types_and_constraints():
@@ -21,3 +21,12 @@ def test_hybrid_row_supports_name_and_position_access():
     assert row["release_id"] == row[0] == 17
     assert row["symbol"] == row[1] == "XAU/USD"
     assert dict(row) == {"release_id": 17, "symbol": "XAU/USD"}
+
+
+def test_postgres_placeholder_conversion_supports_positional_and_named_parameters():
+    assert _postgres_placeholders("SELECT * FROM t WHERE id=?::bigint", (1,)) == (
+        "SELECT * FROM t WHERE id=%s::bigint"
+    )
+    assert _postgres_placeholders(
+        "INSERT INTO t (name) VALUES (:name)", {"name": "value"}
+    ) == "INSERT INTO t (name) VALUES (%(name)s)"
