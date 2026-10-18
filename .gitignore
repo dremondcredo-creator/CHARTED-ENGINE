@@ -1,0 +1,23 @@
+.env
+.env.*
+!.env.example
+
+# Local interpreters, provider data and SQLite databases
+.venv/
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Build output, dependencies and tool caches
+**/node_modules/
+**/dist/
+.vite/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.log
