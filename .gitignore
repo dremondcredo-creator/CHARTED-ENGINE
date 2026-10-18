@@ -1,6 +1,8 @@
 .env
 .env.*
 !.env.example
+.railway/*
+!.railway/railway.ts
 
 # Local interpreters, provider data and SQLite databases
 .venv/

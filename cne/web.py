@@ -1477,7 +1477,7 @@ class DashboardServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
-def serve(port: int = 8000) -> None:
+def serve(port: int = 8000, host: str | None = None) -> None:
     if not 1 <= port <= 65535:
         raise ValueError("Dashboard port must be between 1 and 65535.")
     conn = init_db()
@@ -1485,8 +1485,13 @@ def serve(port: int = 8000) -> None:
         seed(conn)
     finally:
         conn.close()
-    server = DashboardServer(("127.0.0.1", port), DashboardHandler)
-    log.info("Charted News Engine dashboard listening at http://127.0.0.1:%d", port)
+    bind_host = host or settings.dashboard_host
+    server = DashboardServer((bind_host, port), DashboardHandler)
+    log.info(
+        "Charted News Engine dashboard listening at http://%s:%d",
+        bind_host,
+        port,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

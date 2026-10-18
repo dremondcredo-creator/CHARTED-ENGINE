@@ -91,6 +91,7 @@ class Settings:
 
     log_level: str
     log_file: str
+    dashboard_host: str
 
     lookback_years: int
     snapshot_days_back: int
@@ -131,6 +132,7 @@ def _load() -> Settings:
         alert_dry_run=_env_bool("ALERT_DRY_RUN", False),
         log_level=_env("CNE_LOG_LEVEL", "INFO").upper(),
         log_file=_env("CNE_LOG_FILE"),
+        dashboard_host=_env("CNE_DASHBOARD_HOST", "127.0.0.1"),
         lookback_years=_env_int("CNE_LOOKBACK_YEARS", 3),
         snapshot_days_back=_env_int("CNE_SNAPSHOT_DAYS_BACK", 45),
         learn_days_back=_env_int("CNE_LEARN_DAYS_BACK", 120),

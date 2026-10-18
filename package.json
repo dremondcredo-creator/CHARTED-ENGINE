@@ -1,0 +1,7 @@
+{
+  "name": "charted-news-engine-infrastructure",
+  "private": true,
+  "devDependencies": {
+    "railway": "3.16.0"
+  }
+}

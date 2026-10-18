@@ -17,6 +17,27 @@ Copy-Item .env.example .env
 Run `cne help` for the available commands. Start with `cne init`, then use the
 Workflow 01 collection page or `cne collect` to ingest public no-key sources.
 
+## Deploy on Railway
+
+The Railway Docker deployment builds the React/Vite frontend and runs the HTTP
+dashboard together with the periodic collection and release-preparation
+scheduler in one service. Attach a Railway persistent volume at `/data` before
+relying on stored records; SQLite data is written to `/data/cne.db`. The
+service listens on Railway's injected `PORT` and responds to `/api/health`.
+
+1. Install the Railway CLI, authenticate with `railway login`, and link or
+   create a Railway project and service.
+2. Add a persistent volume mounted at `/data`.
+3. Deploy the repository root with `railway up`.
+4. Set optional provider credentials in Railway Variables, never in Git or
+   `.env.example`. Public dashboard access is not authenticated; do not create a
+   public domain until access is protected or public exposure is explicitly
+   intended.
+
+The deployment config uses a Dockerfile build, an HTTP health check, and a
+restart-on-failure policy. SQLite is designed for this single-service
+deployment; do not scale the service horizontally with a shared local database.
+
 ## Workflow 01 — Data collection
 
 The collector stores source observations, normalized calendar events, and

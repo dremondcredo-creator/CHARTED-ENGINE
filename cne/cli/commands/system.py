@@ -1,4 +1,5 @@
 """System commands."""
+import os
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,7 @@ def cmd_dashboard(args):
     if len(args) > 1:
         raise SystemExit("usage: cne dashboard [port]")
     try:
-        port = int(args[0]) if args else 8000
+        port = int(args[0]) if args else int(os.environ.get("PORT", "8000"))
     except ValueError as exc:
         raise SystemExit("dashboard port must be an integer") from exc
     serve(port)
