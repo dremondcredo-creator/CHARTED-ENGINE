@@ -6,12 +6,14 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 
 from cne.config import settings
 from cne.logging_setup import get_logger
 
 log = get_logger(__name__)
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+_INIT_LOCK = Lock()
 
 
 def connect() -> sqlite3.Connection:
@@ -111,14 +113,19 @@ def _migrate_release_monitor_results(conn: sqlite3.Connection) -> None:
 
 
 def init_db() -> sqlite3.Connection:
-    conn = connect()
-    conn.executescript(SCHEMA_PATH.read_text())
-    _migrate_structure_verdicts(conn)
-    _migrate_surprises(conn)
-    _migrate_release_monitor_results(conn)
-    conn.commit()
-    log.info("database ready at %s", settings.db_path)
-    return conn
+    with _INIT_LOCK:
+        conn = connect()
+        try:
+            conn.executescript(SCHEMA_PATH.read_text())
+            _migrate_structure_verdicts(conn)
+            _migrate_surprises(conn)
+            _migrate_release_monitor_results(conn)
+            conn.commit()
+            log.info("database ready at %s", settings.db_path)
+            return conn
+        except Exception:
+            conn.close()
+            raise
 
 
 def upsert_release(conn, *, event_code, period, release_time_utc=None,
