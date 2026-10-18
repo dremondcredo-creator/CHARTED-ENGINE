@@ -35,9 +35,16 @@ The service listens on Railway's injected `PORT` and responds to `/api/health`.
    transactionally with an idempotent migration record.
 4. Deploy the repository root with `railway up`.
 5. Set optional provider credentials in Railway Variables, never in Git or
-   `.env.example`. Public dashboard access is not authenticated; do not create a
-   public domain until access is protected or public exposure is explicitly
-   intended.
+   `.env.example`. Before creating a public domain, enable Google sign-in with
+   `CNE_AUTH_ENABLED=1`, set `GOOGLE_OAUTH_CLIENT_ID`,
+   `GOOGLE_OAUTH_CLIENT_SECRET`, and a random `CNE_OAUTH_COOKIE_SECRET` of at
+   least 32 characters. Set `CNE_OAUTH_ALLOWED_EMAILS` to a comma-separated
+   allowlist of exact Google account emails and set
+   `CNE_OAUTH_REDIRECT_URI` to the public URL ending in `/auth/callback`.
+   Register that exact redirect URI in the Google OAuth client. The health
+   endpoint remains public for Railway; dashboard pages, APIs, event streams,
+   and write endpoints require a verified allowlisted account. The session
+   cookie is signed, Secure, HttpOnly, and SameSite=Lax.
 
 The deployment config uses a Dockerfile build, an HTTP health check, and a
 restart-on-failure policy. Local development and tests continue to use SQLite

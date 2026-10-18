@@ -1,4 +1,5 @@
 import json
+import http.client
 import tempfile
 import threading
 import unittest
@@ -6,11 +7,12 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from urllib.parse import parse_qs, urlencode, urlsplit
+from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from cne import web
+from cne import web, web_auth
 from cne.core import structure
 from cne.core.events import seed
 from cne.db import database
@@ -22,6 +24,7 @@ class DashboardHttpTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.original_db_settings = database.settings
         self.original_web_settings = web.settings
+        self.original_auth_settings = web_auth.settings
         test_root = Path(self.temp_dir.name)
         database.settings = replace(
             database.settings,
@@ -30,6 +33,7 @@ class DashboardHttpTests(unittest.TestCase):
             calendar_csv=test_root / "calendar.csv",
         )
         web.settings = database.settings
+        web_auth.settings = database.settings
         conn = database.init_db()
         seed(conn)
         conn.close()
@@ -45,6 +49,7 @@ class DashboardHttpTests(unittest.TestCase):
         self.thread.join(timeout=2)
         database.settings = self.original_db_settings
         web.settings = self.original_web_settings
+        web_auth.settings = self.original_auth_settings
         self.temp_dir.cleanup()
 
     def get_json(self, path):
@@ -123,6 +128,121 @@ class DashboardHttpTests(unittest.TestCase):
         )
         self.assertEqual(bea_source["latest_run"]["status"], "NOT_CONFIGURED")
         self.assertEqual(dashboard["collection"]["calendar_events"], [])
+
+    def test_google_oauth_protects_dashboard_and_authenticates_allowlisted_user(self):
+        web.settings = replace(
+            web.settings,
+            auth_enabled=True,
+            google_oauth_client_id="client-id",
+            google_oauth_client_secret="client-secret",
+            oauth_cookie_secret="test-cookie-secret-" + ("x" * 40),
+            oauth_redirect_uri="https://engine.example.com/auth/callback",
+            oauth_allowed_emails=("dremondcredo20@gmail.com",),
+        )
+        web_auth.settings = web.settings
+
+        health = urlopen(f"{self.base_url}/api/health", timeout=3)
+        self.assertEqual(health.status, 200)
+        with self.assertRaises(HTTPError) as unauthorized:
+            urlopen(f"{self.base_url}/api/dashboard", timeout=3)
+        self.assertEqual(unauthorized.exception.code, 401)
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", self.server.server_port, timeout=3
+        )
+        connection.request("GET", "/auth/login")
+        login_response = connection.getresponse()
+        self.assertEqual(login_response.status, 302)
+        authorization = urlsplit(login_response.getheader("Location"))
+        query = parse_qs(authorization.query)
+        self.assertEqual(
+            authorization.netloc,
+            "accounts.google.com",
+        )
+        self.assertEqual(query["client_id"], ["client-id"])
+        self.assertEqual(query["redirect_uri"], ["https://engine.example.com/auth/callback"])
+        flow_cookie = next(
+            value.split(";", 1)[0]
+            for name, value in login_response.getheaders()
+            if name.lower() == "set-cookie" and value.startswith(web_auth.FLOW_COOKIE)
+        )
+        connection.close()
+
+        with (
+            patch(
+                "cne.web_auth.requests.post",
+                return_value=Mock(
+                    json=lambda: {"id_token": "verified-token"},
+                    raise_for_status=lambda: None,
+                ),
+            ),
+            patch(
+                "cne.web_auth.id_token.verify_oauth2_token",
+                return_value={
+                    "email": "dremondcredo20@gmail.com",
+                    "email_verified": True,
+                    "nonce": query["nonce"][0],
+                },
+            ),
+        ):
+            callback_query = urlencode(
+                {"code": "authorization-code", "state": query["state"][0]}
+            )
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", self.server.server_port, timeout=3
+            )
+            with self.assertLogs(web.log, level="INFO") as request_logs:
+                connection.request(
+                    "GET",
+                    f"/auth/callback?{callback_query}",
+                    headers={"Cookie": flow_cookie},
+                )
+                callback_response = connection.getresponse()
+            self.assertEqual(callback_response.status, 302)
+            self.assertEqual(callback_response.getheader("Location"), "/")
+            self.assertTrue(
+                all("authorization-code" not in line for line in request_logs.output)
+            )
+            session_cookie = next(
+                value.split(";", 1)[0]
+                for name, value in callback_response.getheaders()
+                if name.lower() == "set-cookie"
+                and value.startswith(web_auth.SESSION_COOKIE)
+            )
+            connection.close()
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", self.server.server_port, timeout=3
+        )
+        connection.request("GET", "/api/dashboard", headers={"Cookie": session_cookie})
+        authenticated = connection.getresponse()
+        self.assertEqual(authenticated.status, 200)
+        connection.close()
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", self.server.server_port, timeout=3
+        )
+        connection.request(
+            "POST",
+            "/api/collect",
+            headers={
+                "Cookie": session_cookie,
+                "Origin": self.base_url,
+                "Content-Length": "0",
+            },
+        )
+        csrf_rejection = connection.getresponse()
+        self.assertEqual(csrf_rejection.status, 403)
+        connection.close()
+
+    def test_google_oauth_fails_closed_when_provider_credentials_are_missing(self):
+        web.settings = replace(web.settings, auth_enabled=True)
+        web_auth.settings = web.settings
+
+        with self.assertRaises(HTTPError) as protected:
+            urlopen(f"{self.base_url}/", timeout=3)
+        self.assertEqual(protected.exception.code, 503)
+        self.assertEqual(self.get_json("/api/health")["status"], "ok")
 
     def test_dashboard_exposes_biquote_quote_provenance_and_closed_status(self):
         conn = database.connect()

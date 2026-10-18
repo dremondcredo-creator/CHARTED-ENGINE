@@ -81,6 +81,12 @@ class Settings:
     database_url: str
     sqlite_import_paths: tuple[Path, ...]
     calendar_csv: Path
+    auth_enabled: bool
+    google_oauth_client_id: str
+    google_oauth_client_secret: str
+    oauth_cookie_secret: str
+    oauth_redirect_uri: str
+    oauth_allowed_emails: tuple[str, ...]
 
     telegram_bot_token: str
     telegram_chat_id: str
@@ -124,6 +130,11 @@ def _load() -> Settings:
         for value in _env("CNE_SQLITE_IMPORT_PATHS").split(",")
         if value.strip()
     )
+    oauth_allowed_emails = tuple(
+        email.strip().casefold()
+        for email in _env("CNE_OAUTH_ALLOWED_EMAILS").split(",")
+        if email.strip()
+    )
 
     s = Settings(
         base_dir=base,
@@ -132,6 +143,12 @@ def _load() -> Settings:
         database_url=_env("DATABASE_URL"),
         sqlite_import_paths=import_paths,
         calendar_csv=data_dir / "calendar.csv",
+        auth_enabled=_env_bool("CNE_AUTH_ENABLED"),
+        google_oauth_client_id=_env("GOOGLE_OAUTH_CLIENT_ID"),
+        google_oauth_client_secret=_env("GOOGLE_OAUTH_CLIENT_SECRET"),
+        oauth_cookie_secret=_env("CNE_OAUTH_COOKIE_SECRET"),
+        oauth_redirect_uri=_env("CNE_OAUTH_REDIRECT_URI"),
+        oauth_allowed_emails=oauth_allowed_emails,
         telegram_bot_token=_env("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_env("TELEGRAM_CHAT_ID"),
         alpha_vantage_api_key=_env("ALPHA_VANTAGE_API_KEY"),

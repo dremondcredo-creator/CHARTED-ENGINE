@@ -23,6 +23,7 @@ from cne.core.events import BY_CODE, seed
 from cne.db.database import DB_ERRORS, connect, data_version, init_db
 from cne.learning.lookup import historical_edge_for_release
 from cne.scheduler.planner import build_schedule
+from cne import web_auth
 
 log = logging.getLogger(__name__)
 
@@ -1159,7 +1160,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
             log.debug("Dashboard request closed by client.")
 
     def log_message(self, fmt: str, *args: object) -> None:
-        log.info("%s - %s", self.address_string(), fmt % args)
+        safe_args = list(args)
+        if safe_args:
+            request_line = str(safe_args[0]).split()
+            if len(request_line) >= 2:
+                safe_args[0] = f"{request_line[0]} {urlsplit(request_line[1]).path}"
+        log.info("%s - %s", self.address_string(), fmt % tuple(safe_args))
+
+    def _auth_gate(self, path: str) -> bool:
+        if path == "/api/health" or not settings.auth_enabled:
+            return True
+        if not web_auth.is_configured():
+            web_auth.reject_unconfigured(self)
+            return False
+        if not web_auth.is_authenticated(self):
+            web_auth.reject_unauthorized(self, api=path.startswith("/api/"))
+            return False
+        return True
 
     def _json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
@@ -1295,6 +1312,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
+        if settings.auth_enabled and path in (
+            "/auth/login",
+            "/auth/callback",
+            "/auth/logout",
+        ):
+            try:
+                if path == "/auth/login":
+                    web_auth.begin_login(self)
+                elif path == "/auth/callback":
+                    web_auth.finish_login(self, parse_qs(parsed.query))
+                else:
+                    web_auth.logout(self)
+            except web_auth.OAuthError:
+                log.exception("Google OAuth flow failed.")
+                web_auth.reject_oauth_error(self)
+            return
+        if not self._auth_gate(path):
+            return
         if path == "/api/events":
             self._stream_events()
             return
@@ -1309,12 +1344,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
+        if not self._auth_gate(path):
+            return
         if path not in ("/api/simulate", "/api/collect"):
             self._json(404, {"error": "API route not found."})
             return
         origin = self.headers.get("Origin")
-        if origin and urlsplit(origin).hostname not in ("localhost", "127.0.0.1", "::1"):
+        origin_host = urlsplit(origin).hostname if origin else None
+        request_host = urlsplit(f"//{self.headers.get('Host', '')}").hostname
+        if origin and origin_host != request_host:
             self._json(403, {"error": "Cross-origin requests are not allowed."})
+            return
+        if settings.auth_enabled and (
+            not origin or urlsplit(origin).scheme != "https" or origin_host != request_host
+        ):
+            self._json(403, {"error": "A same-origin HTTPS request is required."})
             return
         if path == "/api/collect":
             conn = connect()
